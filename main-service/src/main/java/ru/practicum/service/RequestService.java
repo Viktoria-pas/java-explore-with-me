@@ -130,7 +130,7 @@ public class RequestService {
         }
 
         requests.forEach(request -> {
-            if (!request.getEvent().getId().equals(eventId)) {
+            if (!request.getEvent().getId().equals(request.getEvent().getId())) {
                 throw new ConflictException("Request does not belong to this event");
             }
             if (request.getStatus() != RequestStatus.PENDING) {
@@ -142,21 +142,41 @@ public class RequestService {
         List<ParticipationRequestDto> rejectedRequests = new ArrayList<>();
 
         if (updateRequest.getStatus() == RequestStatus.CONFIRMED) {
-
             int availableSlots = event.getParticipantLimit() > 0 ?
-                    event.getParticipantLimit() - event.getConfirmedRequests() : requests.size();
+                    event.getParticipantLimit() - event.getConfirmedRequests() : Integer.MAX_VALUE;
 
-            for (int i = 0; i < requests.size(); i++) {
-                ParticipationRequest request = requests.get(i);
-                if (i < availableSlots) {
-                    request.setStatus(RequestStatus.CONFIRMED);
-                    event.setConfirmedRequests(event.getConfirmedRequests() + 1);
-                    confirmedRequests.add(requestMapper.toParticipationRequestDto(request));
-                } else {
+            if (event.getParticipantLimit() > 0 && availableSlots <= 0) {
+                throw new ConflictException("Event has reached participant limit. Cannot confirm any more requests");
+            }
+
+            if (event.getParticipantLimit() > 0 && requests.size() > availableSlots) {
+                throw new ConflictException(String.format(
+                        "Cannot confirm %d requests. Only %d slots available",
+                        requests.size(), availableSlots));
+            }
+
+            requests.forEach(request -> {
+                request.setStatus(RequestStatus.CONFIRMED);
+                event.setConfirmedRequests(event.getConfirmedRequests() + 1);
+                confirmedRequests.add(requestMapper.toParticipationRequestDto(request));
+            });
+
+            if (event.getParticipantLimit() > 0 &&
+                    event.getConfirmedRequests() >= event.getParticipantLimit()) {
+
+                List<ParticipationRequest> otherPendingRequests = requestRepository
+                        .findByEventIdAndStatus(eventId, RequestStatus.PENDING);
+
+                otherPendingRequests.forEach(request -> {
                     request.setStatus(RequestStatus.REJECTED);
                     rejectedRequests.add(requestMapper.toParticipationRequestDto(request));
+                });
+
+                if (!otherPendingRequests.isEmpty()) {
+                    requestRepository.saveAll(otherPendingRequests);
                 }
             }
+
         } else if (updateRequest.getStatus() == RequestStatus.REJECTED) {
             requests.forEach(request -> {
                 request.setStatus(RequestStatus.REJECTED);
