@@ -43,35 +43,49 @@ public class EventService {
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, int from, int size,
                                                HttpServletRequest request) {
+        try {
+            log.info("Starting getPublicEvents with categories: {}", categories);
 
-        if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
-            throw new ValidationException("Start date cannot be after end date");
-        }
+            if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
+                throw new ValidationException("Start date cannot be after end date");
+            }
 
-        if (rangeStart == null && rangeEnd == null) {
-            rangeStart = LocalDateTime.now();
-        }
+            if (rangeStart == null && rangeEnd == null) {
+                rangeStart = LocalDateTime.now();
+            }
 
-        saveHit(request);
+            log.info("Calling saveHit...");
+            saveHit(request);
 
-        Sort sortBy = getSortForPublicEvents(sort);
-        Pageable pageable = PageRequest.of(from / size, size, sortBy);
+            Sort sortBy = getSortForPublicEvents(sort);
+            Pageable pageable = PageRequest.of(from / size, size, sortBy);
 
-        var events = eventRepository.findPublishedEvents(
-                text, categories, paid, rangeStart, rangeEnd, pageable
-        ).getContent();
+            log.info("Calling findPublishedEvents...");
+            var events = eventRepository.findPublishedEvents(
+                    text, categories, paid, rangeStart, rangeEnd, pageable
+            ).getContent();
 
-        var eventsWithViews = addViewsToEvents(events);
+            log.info("Found {} events", events.size());
 
-        if (onlyAvailable != null && onlyAvailable) {
-            eventsWithViews = eventsWithViews.stream()
-                    .filter(this::isEventAvailable)
+            log.info("Adding views to events...");
+            var eventsWithViews = addViewsToEvents(events);
+
+            if (onlyAvailable != null && onlyAvailable) {
+                log.info("Filtering available events...");
+                eventsWithViews = eventsWithViews.stream()
+                        .filter(this::isEventAvailable)
+                        .collect(Collectors.toList());
+            }
+
+            log.info("Mapping to DTOs...");
+            return eventsWithViews.stream()
+                    .map(eventMapper::toEventShortDto)
                     .collect(Collectors.toList());
-        }
 
-        return eventsWithViews.stream()
-                .map(eventMapper::toEventShortDto)
-                .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error in getPublicEvents: ", e);
+            throw e;
+        }
     }
 
     public EventFullDto getPublicEvent(Long id, HttpServletRequest request) {
