@@ -36,7 +36,7 @@ services:
     volumes:
       - ewm_data:/var/lib/postgresql/data
 
-  main-service:
+  ewm-service:
     build: ./main-service
     container_name: main-service
     ports:

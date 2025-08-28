@@ -198,12 +198,16 @@ public class EventService {
     }
 
     private void saveHit(HttpServletRequest request) {
-        statsClient.saveHit(
-                "ewm-main-service",
-                request.getRequestURI(),
-                request.getRemoteAddr(),
-                LocalDateTime.now()
-        );
+        try {
+            statsClient.saveHit(
+                    "ewm-main-service",
+                    request.getRequestURI(),
+                    request.getRemoteAddr(),
+                    LocalDateTime.now()
+            );
+        } catch (Exception e) {
+            log.warn("Stats service unavailable: {}", e.getMessage());
+        }
     }
 
     private Sort getSortForPublicEvents(String sort) {
@@ -218,29 +222,37 @@ public class EventService {
             return events;
         }
 
-        List<String> uris = events.stream()
-                .map(event -> "/events/" + event.getId())
-                .collect(Collectors.toList());
+        try {
+            List<String> uris = events.stream()
+                    .map(event -> "/events/" + event.getId())
+                    .collect(Collectors.toList());
 
-        Map<String, Long> viewStats = statsClient.getStats(
-                        LocalDateTime.now().minusYears(10),
-                        LocalDateTime.now(),
-                        uris,
-                        true
-                ).block().stream()
-                .collect(Collectors.toMap(
-                        ViewStatsDto::getUri,
-                        ViewStatsDto::getHits
-                ));
+            List<ViewStatsDto> statsList = statsClient.getStats(
+                    LocalDateTime.now().minusYears(10),
+                    LocalDateTime.now(),
+                    uris,
+                    true
+            ).blockOptional().orElse(List.of());
 
-        events.forEach(event -> {
-            String uri = "/events/" + event.getId();
-            event.setViews(viewStats.getOrDefault(uri, 0L));
-        });
+            Map<String, Long> viewStats = statsList.stream()
+                    .collect(Collectors.toMap(
+                            ViewStatsDto::getUri,
+                            ViewStatsDto::getHits,
+                            (existing, replacement) -> existing
+                    ));
+
+            events.forEach(event -> {
+                String uri = "/events/" + event.getId();
+                event.setViews(viewStats.getOrDefault(uri, 0L));
+            });
+
+        } catch (Exception e) {
+            log.warn("Failed to get view statistics: {}", e.getMessage());
+            events.forEach(event -> event.setViews(0L));
+        }
 
         return events;
     }
-
     private void addViewsToEvent(Event event) {
         addViewsToEvents(List.of(event));
     }
