@@ -253,6 +253,7 @@ public class EventService {
 
         return events;
     }
+
     private void addViewsToEvent(Event event) {
         addViewsToEvents(List.of(event));
     }
