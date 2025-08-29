@@ -130,7 +130,7 @@ public class RequestService {
         }
 
         requests.forEach(request -> {
-            if (!request.getEvent().getId().equals(request.getEvent().getId())) {
+            if (!request.getEvent().getId().equals(eventId)) {
                 throw new ConflictException("Request does not belong to this event");
             }
             if (request.getStatus() != RequestStatus.PENDING) {
