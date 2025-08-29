@@ -45,6 +45,7 @@ public class StatsServiceImpl implements StatsService {
         if (start.isAfter(end)) {
             throw new IllegalArgumentException("Start date cannot be after end date");
         }
+
         if (end  == null) {
             throw new IllegalArgumentException("End date cannot be null");
         }
