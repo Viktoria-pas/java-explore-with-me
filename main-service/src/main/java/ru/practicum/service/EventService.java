@@ -44,43 +44,21 @@ public class EventService {
                                                Boolean onlyAvailable, String sort, int from, int size,
                                                HttpServletRequest request) {
         try {
-            log.info("Starting getPublicEvents with categories: {}", categories);
+            log.info("Starting getPublicEvents with categories: {}, sort: {}", categories, sort);
 
-            if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
-                throw new ValidationException("Start date cannot be after end date");
-            }
+            rangeStart = validateAndPrepareTimeRange(rangeStart, rangeEnd);
 
-            if (rangeStart == null && rangeEnd == null) {
-                rangeStart = LocalDateTime.now();
-            }
-
-            log.info("Calling saveHit...");
             saveHit(request);
 
-            Sort sortBy = getSortForPublicEvents(sort);
-            Pageable pageable = PageRequest.of(from / size, size, sortBy);
+            List<Event> events = fetchEventsFromDatabase(text, categories, paid, rangeStart, rangeEnd, sort, from, size);
 
-            log.info("Calling findPublishedEvents...");
-            var events = eventRepository.findPublishedEvents(
-                    text, categories, paid, rangeStart, rangeEnd, pageable
-            ).getContent();
+            List<Event> eventsWithViews = addViewsToEvents(events);
 
-            log.info("Found {} events", events.size());
+            eventsWithViews = filterAvailableEvents(eventsWithViews, onlyAvailable);
 
-            log.info("Adding views to events...");
-            var eventsWithViews = addViewsToEvents(events);
+            eventsWithViews = applySortingAndPagination(eventsWithViews, sort, from, size);
 
-            if (onlyAvailable != null && onlyAvailable) {
-                log.info("Filtering available events...");
-                eventsWithViews = eventsWithViews.stream()
-                        .filter(this::isEventAvailable)
-                        .collect(Collectors.toList());
-            }
-
-            log.info("Mapping to DTOs...");
-            return eventsWithViews.stream()
-                    .map(eventMapper::toEventShortDto)
-                    .collect(Collectors.toList());
+            return convertToDto(eventsWithViews);
 
         } catch (Exception e) {
             log.error("Error in getPublicEvents: ", e);
@@ -189,6 +167,72 @@ public class EventService {
         return eventMapper.toEventFullDto(event);
     }
 
+    private LocalDateTime validateAndPrepareTimeRange(LocalDateTime rangeStart, LocalDateTime rangeEnd) {
+        if (rangeStart != null && rangeEnd != null && rangeStart.isAfter(rangeEnd)) {
+            throw new ValidationException("Start date cannot be after end date");
+        }
+
+        if (rangeStart == null && rangeEnd == null) {
+            rangeStart = LocalDateTime.now();
+        }
+
+        return rangeStart;
+    }
+
+    private List<Event> fetchEventsFromDatabase(String text, List<Long> categories, Boolean paid,
+                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
+                                                String sort, int from, int size) {
+        log.info("Calling findPublishedEvents...");
+
+        Pageable pageable = createPageable(sort, from, size);
+
+        List<Event> events = eventRepository.findPublishedEvents(
+                text, categories, paid, rangeStart, rangeEnd, pageable
+        ).getContent();
+
+        log.info("Found {} events", events.size());
+        return events;
+    }
+
+    private Pageable createPageable(String sort, int from, int size) {
+        Sort sortBy = Sort.by(Sort.Direction.DESC, "eventDate");
+
+        if ("VIEWS".equals(sort)) {
+            return PageRequest.of(0, Integer.MAX_VALUE, sortBy);
+        } else {
+            return PageRequest.of(from / size, size, sortBy);
+        }
+    }
+
+    private List<Event> filterAvailableEvents(List<Event> events, Boolean onlyAvailable) {
+        if (onlyAvailable != null && onlyAvailable) {
+            log.info("Filtering available events...");
+            return events.stream()
+                    .filter(this::isEventAvailable)
+                    .collect(Collectors.toList());
+        }
+        return events;
+    }
+
+    private List<Event> applySortingAndPagination(List<Event> events, String sort, int from, int size) {
+        if ("VIEWS".equals(sort)) {
+            log.info("Sorting by views and applying pagination...");
+            return events.stream()
+                    .sorted((e1, e2) -> Long.compare(e2.getViews(), e1.getViews())) // по убыванию просмотров
+                    .skip(from)
+                    .limit(size)
+                    .collect(Collectors.toList());
+        }
+        return events;
+    }
+
+    private List<EventShortDto> convertToDto(List<Event> events) {
+        log.info("Mapping to DTOs...");
+        return events.stream()
+                .map(eventMapper::toEventShortDto)
+                .collect(Collectors.toList());
+    }
+
     private void checkUserExists(Long userId) {
         if (!userRepository.existsById(userId)) {
             throw new NotFoundException("User not found");
@@ -222,13 +266,6 @@ public class EventService {
         } catch (Exception e) {
             log.warn("Stats service unavailable: {}", e.getMessage());
         }
-    }
-
-    private Sort getSortForPublicEvents(String sort) {
-        if ("VIEWS".equals(sort)) {
-            return Sort.by(Sort.Direction.DESC, "views");
-        }
-        return Sort.by(Sort.Direction.DESC, "eventDate");
     }
 
     private List<Event> addViewsToEvents(List<Event> events) {
