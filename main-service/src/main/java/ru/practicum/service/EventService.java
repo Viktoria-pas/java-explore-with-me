@@ -20,6 +20,7 @@ import ru.practicum.model.enums.EventState;
 import ru.practicum.repository.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +38,6 @@ public class EventService {
     private final LocationRepository locationRepository;
     private final EventMapper eventMapper;
     private final StatsClient statsClient;
-
 
     public List<EventShortDto> getPublicEvents(String text, List<Long> categories, Boolean paid,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
@@ -149,9 +149,34 @@ public class EventService {
                                              LocalDateTime rangeEnd, int from, int size) {
         Pageable pageable = PageRequest.of(from / size, size);
 
-        return eventRepository.findEventsForAdmin(users, states, categories,
-                        rangeStart, rangeEnd, pageable)
-                .stream()
+        // Получаем все события и фильтруем программно
+        List<Event> events = eventRepository.findAll(pageable).getContent();
+
+        // Применяем фильтры программно
+        events = events.stream()
+                .filter(event -> {
+                    // Фильтр по пользователям
+                    return users == null || users.isEmpty() || users.contains(event.getInitiator().getId());
+                })
+                .filter(event -> {
+                    // Фильтр по состояниям
+                    return states == null || states.isEmpty() || states.contains(event.getState());
+                })
+                .filter(event -> {
+                    // Фильтр по категориям
+                    return categories == null || categories.isEmpty() || categories.contains(event.getCategory().getId());
+                })
+                .filter(event -> {
+                    // Фильтр по дате начала
+                    return rangeStart == null || !event.getEventDate().isBefore(rangeStart);
+                })
+                .filter(event -> {
+                    // Фильтр по дате окончания
+                    return rangeEnd == null || !event.getEventDate().isAfter(rangeEnd);
+                })
+                .collect(Collectors.toList());
+
+        return events.stream()
                 .map(eventMapper::toEventFullDto)
                 .collect(Collectors.toList());
     }
@@ -182,15 +207,46 @@ public class EventService {
     private List<Event> fetchEventsFromDatabase(String text, List<Long> categories, Boolean paid,
                                                 LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                 String sort, int from, int size) {
-        log.info("Calling findPublishedEvents...");
+        log.info("Fetching published events with simple approach...");
 
         Pageable pageable = createPageable(sort, from, size);
 
-        List<Event> events = eventRepository.findPublishedEvents(
-                text, categories, paid, rangeStart, rangeEnd, pageable
-        ).getContent();
+        List<Event> events;
 
-        log.info("Found {} events", events.size());
+        // Используем простые методы Spring Data
+        if (categories != null && !categories.isEmpty()) {
+            events = eventRepository.findByStateAndCategoryIdIn(
+                    EventState.PUBLISHED, categories, pageable).getContent();
+        } else {
+            events = eventRepository.findByState(EventState.PUBLISHED, pageable).getContent();
+        }
+
+        // Применяем фильтры программно
+        events = events.stream()
+                .filter(event -> {
+                    // Фильтр по тексту
+                    if (text != null && !text.trim().isEmpty()) {
+                        String lowerText = text.toLowerCase().trim();
+                        return event.getAnnotation().toLowerCase().contains(lowerText) ||
+                                event.getDescription().toLowerCase().contains(lowerText);
+                    }
+                    return true;
+                })
+                .filter(event -> {
+                    // Фильтр по платности
+                    return paid == null || event.getPaid().equals(paid);
+                })
+                .filter(event -> {
+                    // Фильтр по дате начала
+                    return rangeStart == null || !event.getEventDate().isBefore(rangeStart);
+                })
+                .filter(event -> {
+                    // Фильтр по дате окончания
+                    return rangeEnd == null || !event.getEventDate().isAfter(rangeEnd);
+                })
+                .collect(Collectors.toList());
+
+        log.info("Found {} events after filtering", events.size());
         return events;
     }
 
@@ -198,7 +254,8 @@ public class EventService {
         Sort sortBy = Sort.by(Sort.Direction.DESC, "eventDate");
 
         if ("VIEWS".equals(sort)) {
-            return PageRequest.of(0, Integer.MAX_VALUE, sortBy);
+            // Для сортировки по просмотрам берем больше записей для программной сортировки
+            return PageRequest.of(0, Math.max(size * 10, 100), sortBy);
         } else {
             return PageRequest.of(from / size, size, sortBy);
         }
@@ -218,12 +275,17 @@ public class EventService {
         if ("VIEWS".equals(sort)) {
             log.info("Sorting by views and applying pagination...");
             return events.stream()
-                    .sorted((e1, e2) -> Long.compare(e2.getViews(), e1.getViews())) // по убыванию просмотров
+                    .sorted((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()))
                     .skip(from)
                     .limit(size)
                     .collect(Collectors.toList());
         }
-        return events;
+
+        // Если не сортировка по просмотрам, применяем обычную пагинацию
+        return events.stream()
+                .skip(from)
+                .limit(size)
+                .collect(Collectors.toList());
     }
 
     private List<EventShortDto> convertToDto(List<Event> events) {
@@ -263,6 +325,7 @@ public class EventService {
                     request.getRemoteAddr(),
                     LocalDateTime.now()
             );
+            log.debug("Hit saved for URI: {}", request.getRequestURI());
         } catch (Exception e) {
             log.warn("Stats service unavailable: {}", e.getMessage());
         }
@@ -278,12 +341,19 @@ public class EventService {
                     .map(event -> "/events/" + event.getId())
                     .collect(Collectors.toList());
 
+            // Используем reactive клиент с таймаутом
             List<ViewStatsDto> statsList = statsClient.getStats(
-                    LocalDateTime.now().minusYears(10),
-                    LocalDateTime.now(),
-                    uris,
-                    true
-            ).blockOptional().orElse(List.of());
+                            LocalDateTime.now().minusYears(10),
+                            LocalDateTime.now(),
+                            uris,
+                            true
+                    ).timeout(Duration.ofSeconds(5))
+                    .onErrorReturn(List.of())
+                    .block();
+
+            if (statsList == null) {
+                statsList = List.of();
+            }
 
             Map<String, Long> viewStats = statsList.stream()
                     .collect(Collectors.toMap(
