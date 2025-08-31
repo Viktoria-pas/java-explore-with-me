@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.practicum.dto.category.CategoryDto;
 import ru.practicum.dto.category.NewCategoryDto;
@@ -30,6 +31,7 @@ import java.util.List;
 @RequestMapping("/admin")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
 public class AdminController {
 
     private final UserService userService;
@@ -68,13 +70,13 @@ public class AdminController {
 
     @DeleteMapping("/categories/{catId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteCategory(@PathVariable Long catId) {
+    public void deleteCategory(@PathVariable @Positive Long catId) {
         log.info("Deleting category: {}", catId);
         categoryService.deleteCategory(catId);
     }
 
     @PatchMapping("/categories/{catId}")
-    public CategoryDto updateCategory(@PathVariable Long catId,
+    public CategoryDto updateCategory(@PathVariable @Positive Long catId,
                                       @Valid @RequestBody CategoryDto categoryDto) {
         log.info("Updating category: {}", catId);
         return categoryService.updateCategory(catId, categoryDto);
