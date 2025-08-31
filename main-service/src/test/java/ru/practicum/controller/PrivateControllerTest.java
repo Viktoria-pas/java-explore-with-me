@@ -339,6 +339,6 @@ class PrivateControllerTest {
         mockMvc.perform(get("/users/1/events")
                         .param("from", "-1")
                         .param("size", "0"))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
     }
 }

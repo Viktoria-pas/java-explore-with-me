@@ -387,7 +387,7 @@ class PublicControllerTest {
         mockMvc.perform(get("/events")
                         .param("from", "-1")
                         .param("size", "0"))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -395,7 +395,7 @@ class PublicControllerTest {
         mockMvc.perform(get("/categories")
                         .param("from", "-1")
                         .param("size", "0"))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -403,7 +403,7 @@ class PublicControllerTest {
         mockMvc.perform(get("/compilations")
                         .param("from", "-1")
                         .param("size", "0"))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
