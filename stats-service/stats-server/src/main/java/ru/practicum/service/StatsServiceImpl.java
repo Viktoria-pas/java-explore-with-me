@@ -37,6 +37,15 @@ public class StatsServiceImpl implements StatsService {
     @Transactional(readOnly = true)
     public List<ViewStatsDto> getStats(LocalDateTime start, LocalDateTime end,
                                        List<String> uris, Boolean unique) {
+
+        if (start  == null) {
+            throw new IllegalArgumentException("Start date cannot be null");
+        }
+
+        if (end  == null) {
+            throw new IllegalArgumentException("End date cannot be null");
+        }
+
         if (start.isAfter(end)) {
             throw new IllegalArgumentException("Start date cannot be after end date");
         }
