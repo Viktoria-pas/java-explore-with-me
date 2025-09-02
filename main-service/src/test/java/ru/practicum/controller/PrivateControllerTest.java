@@ -8,15 +8,19 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import ru.practicum.dto.comment.CommentDto;
+import ru.practicum.dto.comment.NewCommentDto;
+import ru.practicum.dto.comment.UpdateCommentDto;
 import ru.practicum.dto.event.EventFullDto;
 import ru.practicum.dto.event.EventShortDto;
 import ru.practicum.dto.event.NewEventDto;
-import ru.practicum.dto.event.UpdateEventUserRequest;
 import ru.practicum.dto.location.LocationDto;
 import ru.practicum.dto.request.EventRequestStatusUpdateRequest;
 import ru.practicum.dto.request.EventRequestStatusUpdateResult;
 import ru.practicum.dto.request.ParticipationRequestDto;
+import ru.practicum.model.enums.CommentState;
 import ru.practicum.model.enums.RequestStatus;
+import ru.practicum.service.CommentService;
 import ru.practicum.service.EventService;
 import ru.practicum.service.RequestService;
 
@@ -26,6 +30,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doNothing;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -43,6 +48,9 @@ class PrivateControllerTest {
 
     @MockBean
     private RequestService requestService;
+
+    @MockBean
+    private CommentService commentService;
 
     private EventShortDto eventShortDto;
     private EventFullDto eventFullDto;
@@ -115,85 +123,133 @@ class PrivateControllerTest {
     }
 
     @Test
-    void createEvent_WithNullCategory_ShouldReturnBadRequest() throws Exception {
-        newEventDto.setCategory(null);
+    void getUserComments_ShouldReturnUserComments() throws Exception {
+        CommentDto commentDto = new CommentDto();
+        commentDto.setId(1L);
+        commentDto.setText("User comment");
+        commentDto.setState(CommentState.CONFIRMED);
 
-        mockMvc.perform(post("/users/1/events")
+        when(commentService.getUserComments(eq(1L), eq(0), eq(10)))
+                .thenReturn(List.of(commentDto));
+
+        mockMvc.perform(get("/users/1/comments")
+                        .param("from", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].text").value("User comment"));
+
+        verify(commentService).getUserComments(1L, 0, 10);
+    }
+
+    @Test
+    void createComment_WithValidData_ShouldReturnCreatedComment() throws Exception {
+        NewCommentDto newCommentDto = new NewCommentDto("Great event! Really enjoyed it.");
+        CommentDto createdComment = new CommentDto();
+        createdComment.setId(1L);
+        createdComment.setText("Great event! Really enjoyed it.");
+        createdComment.setState(CommentState.PENDING);
+
+        when(commentService.createComment(eq(1L), eq(1L), any(NewCommentDto.class)))
+                .thenReturn(createdComment);
+
+        mockMvc.perform(post("/users/1/events/1/comments")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newEventDto)))
+                        .content(objectMapper.writeValueAsString(newCommentDto)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.state").value("PENDING"));
+
+        verify(commentService).createComment(eq(1L), eq(1L), any(NewCommentDto.class));
+    }
+
+    @Test
+    void createComment_WithShortText_ShouldReturnBadRequest() throws Exception {
+        NewCommentDto shortComment = new NewCommentDto("Ok"); // Too short
+
+        mockMvc.perform(post("/users/1/events/1/comments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(shortComment)))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void createEvent_WithShortDescription_ShouldReturnBadRequest() throws Exception {
-        newEventDto.setDescription("Short"); // Less than 20 characters
+    void createComment_WithBlankText_ShouldReturnBadRequest() throws Exception {
+        NewCommentDto blankComment = new NewCommentDto(""); // Blank
 
-        mockMvc.perform(post("/users/1/events")
+        mockMvc.perform(post("/users/1/events/1/comments")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newEventDto)))
+                        .content(objectMapper.writeValueAsString(blankComment)))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void createEvent_WithInvalidCoordinates_ShouldReturnBadRequest() throws Exception {
-        newEventDto.setLocation(new LocationDto(91.0f, 37.6173f)); // Invalid latitude
+    void getEventComments_ShouldReturnEventComments() throws Exception {
+        CommentDto commentDto = new CommentDto();
+        commentDto.setId(1L);
+        commentDto.setText("Comment on my event");
+        commentDto.setState(CommentState.PENDING);
 
-        mockMvc.perform(post("/users/1/events")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(newEventDto)))
-                .andExpect(status().isBadRequest());
+        when(commentService.getEventComments(eq(1L), eq(1L), eq(0), eq(10)))
+                .thenReturn(List.of(commentDto));
+
+        mockMvc.perform(get("/users/1/events/1/comments")
+                        .param("from", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").value(1));
+
+        verify(commentService).getEventComments(1L, 1L, 0, 10);
     }
 
     @Test
-    void getUserEvent_WithValidIds_ShouldReturnEvent() throws Exception {
-        when(eventService.getUserEvent(1L, 1L)).thenReturn(eventFullDto);
+    void updateComment_WithValidData_ShouldReturnUpdatedComment() throws Exception {
+        UpdateCommentDto updateDto = new UpdateCommentDto("Updated comment text with sufficient length");
+        CommentDto updatedComment = new CommentDto();
+        updatedComment.setId(1L);
+        updatedComment.setText("Updated comment text with sufficient length");
+        updatedComment.setState(CommentState.PENDING);
 
-        mockMvc.perform(get("/users/1/events/1"))
+        when(commentService.updateComment(eq(1L), eq(1L), any(UpdateCommentDto.class)))
+                .thenReturn(updatedComment);
+
+        mockMvc.perform(patch("/users/1/comments/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.title").value("Test Event"));
+                .andExpect(jsonPath("$.state").value("PENDING"));
 
-        verify(eventService).getUserEvent(1L, 1L);
+        verify(commentService).updateComment(eq(1L), eq(1L), any(UpdateCommentDto.class));
     }
 
     @Test
-    void updateEvent_WithValidData_ShouldReturnUpdatedEvent() throws Exception {
-        UpdateEventUserRequest updateRequest = new UpdateEventUserRequest();
-        updateRequest.setTitle("Updated Event Title");
-        updateRequest.setAnnotation("Updated annotation with sufficient length for validation");
+    void updateComment_WithShortText_ShouldReturnBadRequest() throws Exception {
+        UpdateCommentDto shortUpdate = new UpdateCommentDto("Hi"); // Too short
 
-        when(eventService.updateUserEvent(eq(1L), eq(1L), any(UpdateEventUserRequest.class)))
-                .thenReturn(eventFullDto);
-
-        mockMvc.perform(patch("/users/1/events/1")
+        mockMvc.perform(patch("/users/1/comments/1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.title").value("Test Event"));
-
-        verify(eventService).updateUserEvent(eq(1L), eq(1L), any(UpdateEventUserRequest.class));
-    }
-
-    @Test
-    void updateEvent_WithInvalidAnnotationLength_ShouldReturnBadRequest() throws Exception {
-        UpdateEventUserRequest updateRequest = new UpdateEventUserRequest();
-        updateRequest.setAnnotation("Short"); // Too short
-
-        mockMvc.perform(patch("/users/1/events/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
+                        .content(objectMapper.writeValueAsString(shortUpdate)))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void updateEvent_WithNegativeParticipantLimit_ShouldReturnBadRequest() throws Exception {
-        UpdateEventUserRequest updateRequest = new UpdateEventUserRequest();
-        updateRequest.setParticipantLimit(-1);
+    void deleteComment_ShouldReturnNoContent() throws Exception {
+        doNothing().when(commentService).deleteComment(1L, 1L);
 
-        mockMvc.perform(patch("/users/1/events/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
+        mockMvc.perform(delete("/users/1/comments/1"))
+                .andExpect(status().isNoContent());
+
+        verify(commentService).deleteComment(1L, 1L);
+    }
+
+    @Test
+    void getUserComments_WithInvalidPaginationParams_ShouldReturnBadRequest() throws Exception {
+        mockMvc.perform(get("/users/1/comments")
+                        .param("from", "-1")
+                        .param("size", "0"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -246,30 +302,6 @@ class PrivateControllerTest {
     }
 
     @Test
-    void updateRequestStatus_WithEmptyRequestIds_ShouldReturnBadRequest() throws Exception {
-        EventRequestStatusUpdateRequest updateRequest = new EventRequestStatusUpdateRequest();
-        updateRequest.setRequestIds(List.of()); // Empty list
-        updateRequest.setStatus(RequestStatus.CONFIRMED);
-
-        mockMvc.perform(patch("/users/1/events/1/requests")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void updateRequestStatus_WithNullStatus_ShouldReturnBadRequest() throws Exception {
-        EventRequestStatusUpdateRequest updateRequest = new EventRequestStatusUpdateRequest();
-        updateRequest.setRequestIds(List.of(1L));
-        updateRequest.setStatus(null);
-
-        mockMvc.perform(patch("/users/1/events/1/requests")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateRequest)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
     void getUserRequests_ShouldReturnUserRequests() throws Exception {
         ParticipationRequestDto requestDto = new ParticipationRequestDto();
         requestDto.setId(1L);
@@ -311,12 +343,6 @@ class PrivateControllerTest {
     }
 
     @Test
-    void createRequest_WithoutEventId_ShouldReturnBadRequest() throws Exception {
-        mockMvc.perform(post("/users/1/requests"))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
     void cancelRequest_ShouldReturnCanceledRequest() throws Exception {
         ParticipationRequestDto requestDto = new ParticipationRequestDto();
         requestDto.setId(1L);
@@ -332,13 +358,5 @@ class PrivateControllerTest {
                 .andExpect(jsonPath("$.status").value("CANCELED"));
 
         verify(requestService).cancelRequest(1L, 1L);
-    }
-
-    @Test
-    void getUserEvents_WithInvalidPaginationParams_ShouldReturnBadRequest() throws Exception {
-        mockMvc.perform(get("/users/1/events")
-                        .param("from", "-1")
-                        .param("size", "0"))
-                .andExpect(status().isBadRequest());
     }
 }

@@ -6,10 +6,12 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.practicum.dto.category.CategoryDto;
+import ru.practicum.dto.comment.CommentDto;
 import ru.practicum.dto.compilation.CompilationDto;
 import ru.practicum.dto.event.EventFullDto;
 import ru.practicum.dto.event.EventShortDto;
 import ru.practicum.service.CategoryService;
+import ru.practicum.service.CommentService;
 import ru.practicum.service.CompilationService;
 import ru.practicum.service.EventService;
 
@@ -29,6 +31,7 @@ public class PublicController {
     private final EventService eventService;
     private final CategoryService categoryService;
     private final CompilationService compilationService;
+    private final CommentService commentService;
 
     @GetMapping("/events")
     public List<EventShortDto> getEvents(
@@ -83,5 +86,14 @@ public class PublicController {
     public CompilationDto getCompilation(@PathVariable Long compId) {
         log.info("Getting compilation with id: {}", compId);
         return compilationService.getCompilation(compId);
+    }
+
+    @GetMapping("/events/{id}/comments")
+    public List<CommentDto> getEventComments(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") @PositiveOrZero Integer from,
+            @RequestParam(defaultValue = "10") @Positive Integer size) {
+        log.info("Getting public comments for event: {}", id);
+        return commentService.getPublicComments(id, from, size);
     }
 }

@@ -5,6 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import ru.practicum.dto.comment.CommentDto;
+import ru.practicum.dto.comment.NewCommentDto;
+import ru.practicum.dto.comment.UpdateCommentDto;
 import ru.practicum.dto.event.EventFullDto;
 import ru.practicum.dto.event.EventShortDto;
 import ru.practicum.dto.event.NewEventDto;
@@ -12,6 +15,7 @@ import ru.practicum.dto.event.UpdateEventUserRequest;
 import ru.practicum.dto.request.EventRequestStatusUpdateRequest;
 import ru.practicum.dto.request.EventRequestStatusUpdateResult;
 import ru.practicum.dto.request.ParticipationRequestDto;
+import ru.practicum.service.CommentService;
 import ru.practicum.service.EventService;
 import ru.practicum.service.RequestService;
 
@@ -29,6 +33,7 @@ public class PrivateController {
 
     private final EventService eventService;
     private final RequestService requestService;
+    private final CommentService commentService;
 
 
     @GetMapping("/events")
@@ -97,5 +102,52 @@ public class PrivateController {
                                                  @PathVariable Long requestId) {
         log.info("Cancelling request {} for user: {}", requestId, userId);
         return requestService.cancelRequest(userId, requestId);
+    }
+
+    @GetMapping("/comments")
+    public List<CommentDto> getUserComments(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") @PositiveOrZero Integer from,
+            @RequestParam(defaultValue = "10") @Positive Integer size) {
+        log.info("Getting comments for user: {}", userId);
+        return commentService.getUserComments(userId, from, size);
+    }
+
+    @PostMapping("/events/{eventId}/comments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CommentDto createComment(
+            @PathVariable Long userId,
+            @PathVariable Long eventId,
+            @Valid @RequestBody NewCommentDto newCommentDto) {
+        log.info("Creating comment for event {} by user {}", eventId, userId);
+        return commentService.createComment(userId, eventId, newCommentDto);
+    }
+
+    @GetMapping("/events/{eventId}/comments")
+    public List<CommentDto> getEventComments(
+            @PathVariable Long userId,
+            @PathVariable Long eventId,
+            @RequestParam(defaultValue = "0") @PositiveOrZero Integer from,
+            @RequestParam(defaultValue = "10") @Positive Integer size) {
+        log.info("Getting comments for event {} by owner {}", eventId, userId);
+        return commentService.getEventComments(userId, eventId, from, size);
+    }
+
+    @PatchMapping("/comments/{commentId}")
+    public CommentDto updateComment(
+            @PathVariable Long userId,
+            @PathVariable Long commentId,
+            @Valid @RequestBody UpdateCommentDto updateCommentDto) {
+        log.info("Updating comment {} by user {}", commentId, userId);
+        return commentService.updateComment(userId, commentId, updateCommentDto);
+    }
+
+    @DeleteMapping("/comments/{commentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteComment(
+            @PathVariable Long userId,
+            @PathVariable Long commentId) {
+        log.info("Deleting comment {} by user {}", commentId, userId);
+        commentService.deleteComment(userId, commentId);
     }
 }
