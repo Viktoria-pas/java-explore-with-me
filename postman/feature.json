@@ -1,0 +1,630 @@
+{
+  "info": {
+    "name": "Comments Tests",
+    "description": "Полные тесты для функциональности комментариев с исправленными проверками валидации",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Создание пользователя",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/users"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 201\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Response has id\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('id');",
+              "    pm.collectionVariables.set(\"userId\", jsonData.id);",
+              "    console.log(\"✅ Created user with ID:\", jsonData.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Создание категории",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Test Category\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/categories"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 201\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Response has id\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('id');",
+              "    pm.collectionVariables.set(\"categoryId\", jsonData.id);",
+              "    console.log(\"✅ Created category with ID:\", jsonData.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Создание события",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Test Event for Comments\",\n  \"annotation\": \"This is a test event for comment functionality testing with sufficient length\",\n  \"description\": \"This is a detailed description of the test event for comment functionality testing with sufficient length to pass validation\",\n  \"category\": {{categoryId}},\n  \"eventDate\": \"2025-12-31 15:00:00\",\n  \"location\": {\n    \"lat\": 55.7558,\n    \"lon\": 37.6173\n  },\n  \"paid\": false,\n  \"participantLimit\": 0,\n  \"requestModeration\": false\n}"
+        },
+        "url": "{{baseUrl}}/users/{{userId}}/events"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 201\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Response has id\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('id');",
+              "    pm.collectionVariables.set(\"eventId\", jsonData.id);",
+              "    console.log(\"✅ Created event with ID:\", jsonData.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Публикация события администратором",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stateAction\": \"PUBLISH_EVENT\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/events/{{eventId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Event is published\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.state).to.eql('PUBLISHED');",
+              "    console.log(\"✅ Event published successfully\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Создание комментария",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Отличное мероприятие! Очень понравилось организация и атмосфера события.\"\n}"
+        },
+        "url": "{{baseUrl}}/users/{{userId}}/events/{{eventId}}/comments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 201\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Comment has correct fields\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('id');",
+              "    pm.expect(jsonData).to.have.property('text');",
+              "    pm.expect(jsonData).to.have.property('state');",
+              "    pm.expect(jsonData).to.have.property('createdOn');",
+              "    pm.expect(jsonData.state).to.eql('PENDING');",
+              "    pm.collectionVariables.set(\"commentId\", jsonData.id);",
+              "    console.log(\"✅ Created comment with ID:\", jsonData.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Получение комментариев пользователя",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/users/{{userId}}/comments?from=0&size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Response is array with user comments\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.be.an('array');",
+              "    pm.expect(jsonData.length).to.be.above(0);",
+              "    console.log(\"✅ Found\", jsonData.length, \"user comments\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Получение комментариев для модерации",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/admin/comments?state=PENDING&from=0&size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"All comments are PENDING\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.be.an('array');",
+              "    if (jsonData.length > 0) {",
+              "        jsonData.forEach(comment => {",
+              "            pm.expect(comment.state).to.eql('PENDING');",
+              "        });",
+              "    }",
+              "    console.log(\"✅ Found\", jsonData.length, \"pending comments\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Модерация комментария - подтверждение",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"state\": \"CONFIRMED\",\n  \"moderatorComment\": \"Комментарий соответствует правилам сообщества\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/comments/{{commentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Comment is confirmed\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.state).to.eql('CONFIRMED');",
+              "    pm.expect(jsonData).to.have.property('updatedOn');",
+              "    console.log(\"✅ Comment confirmed successfully\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Получение публичных комментариев к событию",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/events/{{eventId}}/comments?from=0&size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"All public comments are CONFIRMED\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.be.an('array');",
+              "    if (jsonData.length > 0) {",
+              "        jsonData.forEach(comment => {",
+              "            pm.expect(comment.state).to.eql('CONFIRMED');",
+              "        });",
+              "    }",
+              "    console.log(\"✅ Found\", jsonData.length, \"public comments\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Создание второго комментария",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Второй комментарий для тестирования функции обновления комментария\"\n}"
+        },
+        "url": "{{baseUrl}}/users/{{userId}}/events/{{eventId}}/comments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 201\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.test(\"Second comment created\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.state).to.eql('PENDING');",
+              "    pm.collectionVariables.set(\"commentId2\", jsonData.id);",
+              "    console.log(\"✅ Created second comment with ID:\", jsonData.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Обновление комментария автором",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Обновлённый текст комментария с более подробной информацией о событии\"\n}"
+        },
+        "url": "{{baseUrl}}/users/{{userId}}/comments/{{commentId2}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Comment updated and returned to PENDING\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.text).to.include('Обновлённый текст');",
+              "    pm.expect(jsonData.state).to.eql('PENDING');",
+              "    pm.expect(jsonData).to.have.property('updatedOn');",
+              "    console.log(\"✅ Comment updated successfully\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Получение комментариев к событию владельцем",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/users/{{userId}}/events/{{eventId}}/comments?from=0&size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Owner can see all comments\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.be.an('array');",
+              "    // Владелец события должен видеть все комментарии независимо от статуса",
+              "    console.log(\"✅ Owner can see\", jsonData.length, \"comments total\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Модерация второго комментария - отклонение",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"state\": \"REJECTED\",\n  \"moderatorComment\": \"Комментарий не соответствует правилам сообщества\"\n}"
+        },
+        "url": "{{baseUrl}}/admin/comments/{{commentId2}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Comment is rejected\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.state).to.eql('REJECTED');",
+              "    console.log(\"✅ Comment rejected successfully\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Попытка удаления подтверждённого комментария",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/users/{{userId}}/comments/{{commentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 409 (Conflict)\", function () {",
+              "    pm.response.to.have.status(409);",
+              "});",
+              "",
+              "pm.test(\"Cannot delete confirmed comment\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql('CONFLICT');",
+              "    pm.expect(jsonData.message).to.include('confirmed comment');",
+              "    console.log(\"✅ Correctly prevented deletion of confirmed comment\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Удаление комментария автором (отклонённый)",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/users/{{userId}}/comments/{{commentId2}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 204\", function () {",
+              "    pm.response.to.have.status(204);",
+              "});",
+              "",
+              "console.log(\"✅ Rejected comment deleted by author successfully\");"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Принудительное удаление комментария администратором",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/admin/comments/{{commentId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 204\", function () {",
+              "    pm.response.to.have.status(204);",
+              "});",
+              "",
+              "console.log(\"✅ Comment force-deleted by admin successfully\");"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. Проверка валидации - короткий комментарий",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Ok\"\n}"
+        },
+        "url": "{{baseUrl}}/users/{{userId}}/events/{{eventId}}/comments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 400\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test(\"Validation error for short text\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.message).to.include('validation error');",
+              "    pm.expect(jsonData.status).to.eql('BAD_REQUEST');",
+              "    console.log(\"✅ Validation correctly prevents short comments\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18. Проверка валидации - пустой комментарий",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"\"\n}"
+        },
+        "url": "{{baseUrl}}/users/{{userId}}/events/{{eventId}}/comments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 400\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test(\"Validation error for blank text\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.message).to.include('validation error');",
+              "    pm.expect(jsonData.status).to.eql('BAD_REQUEST');",
+              "    console.log(\"✅ Validation correctly prevents blank comments\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19. Проверка валидации - комментарий только из пробелов",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"   \"\n}"
+        },
+        "url": "{{baseUrl}}/users/{{userId}}/events/{{eventId}}/comments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 400\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "pm.test(\"Validation error for whitespace-only text\", function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.message).to.include('validation error');",
+              "    pm.expect(jsonData.status).to.eql('BAD_REQUEST');",
+              "    console.log(\"✅ Validation correctly prevents whitespace-only comments\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

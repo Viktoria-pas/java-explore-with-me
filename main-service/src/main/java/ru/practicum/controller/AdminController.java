@@ -8,6 +8,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.practicum.dto.category.CategoryDto;
 import ru.practicum.dto.category.NewCategoryDto;
+import ru.practicum.dto.comment.CommentDto;
+import ru.practicum.dto.comment.CommentModerationDto;
 import ru.practicum.dto.compilation.CompilationDto;
 import ru.practicum.dto.compilation.NewCompilationDto;
 import ru.practicum.dto.compilation.UpdateCompilationRequest;
@@ -15,11 +17,9 @@ import ru.practicum.dto.event.EventFullDto;
 import ru.practicum.dto.event.UpdateEventAdminRequest;
 import ru.practicum.dto.user.NewUserRequest;
 import ru.practicum.dto.user.UserDto;
+import ru.practicum.model.enums.CommentState;
 import ru.practicum.model.enums.EventState;
-import ru.practicum.service.CategoryService;
-import ru.practicum.service.CompilationService;
-import ru.practicum.service.EventService;
-import ru.practicum.service.UserService;
+import ru.practicum.service.*;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
@@ -38,6 +38,7 @@ public class AdminController {
     private final CategoryService categoryService;
     private final EventService eventService;
     private final CompilationService compilationService;
+    private final CommentService commentService;
 
     @GetMapping("/users")
     public List<UserDto> getUsers(@RequestParam(required = false) List<Long> ids,
@@ -121,5 +122,29 @@ public class AdminController {
                                             @Valid @RequestBody UpdateCompilationRequest updateRequest) {
         log.info("Updating compilation: {}", compId);
         return compilationService.updateCompilation(compId, updateRequest);
+    }
+
+    @GetMapping("/comments")
+    public List<CommentDto> getCommentsForModeration(
+            @RequestParam(required = false) CommentState state,
+            @RequestParam(defaultValue = "0") @PositiveOrZero Integer from,
+            @RequestParam(defaultValue = "10") @Positive Integer size) {
+        log.info("Getting comments for moderation with state: {}", state);
+        return commentService.getCommentsForModeration(state, from, size);
+    }
+
+    @PatchMapping("/comments/{commentId}")
+    public CommentDto moderateComment(
+            @PathVariable Long commentId,
+            @Valid @RequestBody CommentModerationDto moderationDto) {
+        log.info("Moderating comment {} with state: {}", commentId, moderationDto.getState());
+        return commentService.moderateComment(commentId, moderationDto);
+    }
+
+    @DeleteMapping("/comments/{commentId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteComment(@PathVariable Long commentId) {
+        log.info("Admin deleting comment: {}", commentId);
+        commentService.deleteCommentByAdmin(commentId);
     }
 }

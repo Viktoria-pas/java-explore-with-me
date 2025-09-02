@@ -7,9 +7,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import ru.practicum.dto.comment.CommentDto;
+import ru.practicum.dto.comment.CommentModerationDto;
 import ru.practicum.dto.user.NewUserRequest;
 import ru.practicum.dto.user.UserDto;
+import ru.practicum.model.enums.CommentState;
 import ru.practicum.service.CategoryService;
+import ru.practicum.service.CommentService;
 import ru.practicum.service.CompilationService;
 import ru.practicum.service.EventService;
 import ru.practicum.service.UserService;
@@ -43,6 +47,9 @@ class AdminControllerTest {
 
     @MockBean
     private CompilationService compilationService;
+
+    @MockBean
+    private CommentService commentService;
 
     @Test
     void getUsers_ShouldReturnUserList() throws Exception {
@@ -95,5 +102,71 @@ class AdminControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(userService).deleteUser(1L);
+    }
+
+    @Test
+    void getCommentsForModeration_ShouldReturnCommentList() throws Exception {
+        CommentDto commentDto = new CommentDto();
+        commentDto.setId(1L);
+        commentDto.setText("Test comment");
+        commentDto.setState(CommentState.PENDING);
+
+        when(commentService.getCommentsForModeration(eq(CommentState.PENDING), eq(0), eq(10)))
+                .thenReturn(List.of(commentDto));
+
+        mockMvc.perform(get("/admin/comments")
+                        .param("state", "PENDING")
+                        .param("from", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].state").value("PENDING"));
+
+        verify(commentService).getCommentsForModeration(CommentState.PENDING, 0, 10);
+    }
+
+    @Test
+    void moderateComment_WithValidData_ShouldReturnModeratedComment() throws Exception {
+        CommentModerationDto moderationDto = new CommentModerationDto();
+        moderationDto.setState(CommentState.CONFIRMED);
+        moderationDto.setModeratorComment("Approved");
+
+        CommentDto moderatedComment = new CommentDto();
+        moderatedComment.setId(1L);
+        moderatedComment.setState(CommentState.CONFIRMED);
+
+        when(commentService.moderateComment(eq(1L), any(CommentModerationDto.class)))
+                .thenReturn(moderatedComment);
+
+        mockMvc.perform(patch("/admin/comments/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(moderationDto)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.state").value("CONFIRMED"));
+
+        verify(commentService).moderateComment(eq(1L), any(CommentModerationDto.class));
+    }
+
+    @Test
+    void moderateComment_WithInvalidState_ShouldReturnBadRequest() throws Exception {
+        CommentModerationDto moderationDto = new CommentModerationDto();
+        moderationDto.setState(null); // Invalid
+
+        mockMvc.perform(patch("/admin/comments/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(moderationDto)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deleteComment_ShouldReturnNoContent() throws Exception {
+        doNothing().when(commentService).deleteCommentByAdmin(1L);
+
+        mockMvc.perform(delete("/admin/comments/1"))
+                .andExpect(status().isNoContent());
+
+        verify(commentService).deleteCommentByAdmin(1L);
     }
 }
